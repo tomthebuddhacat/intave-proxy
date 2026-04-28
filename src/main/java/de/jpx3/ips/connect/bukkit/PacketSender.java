@@ -3,55 +3,55 @@ package de.jpx3.ips.connect.bukkit;
 import com.google.common.base.Preconditions;
 import com.google.common.io.ByteArrayDataOutput;
 import com.google.common.io.ByteStreams;
+import com.velocitypowered.api.proxy.Player;
+import com.velocitypowered.api.proxy.messages.MinecraftChannelIdentifier;
 import de.jpx3.ips.IntaveProxySupportPlugin;
-import net.md_5.bungee.api.connection.ProxiedPlayer;
 
 import static de.jpx3.ips.connect.bukkit.MessengerService.*;
 
 public final class PacketSender {
+
   private final IntaveProxySupportPlugin plugin;
   private final MessengerService messengerService;
 
-  private PacketSender(
-    IntaveProxySupportPlugin plugin,
-    MessengerService messengerService
-  ) {
+  private final MinecraftChannelIdentifier channelIdentifier = MinecraftChannelIdentifier.from(OUTGOING_CHANNEL);
+
+  private PacketSender(IntaveProxySupportPlugin plugin, MessengerService messengerService) {
     this.plugin = plugin;
     this.messengerService = messengerService;
   }
 
   public void setup() {
-    plugin.getProxy().registerChannel(OUTGOING_CHANNEL);
+    plugin.server().getChannelRegistrar().register(channelIdentifier);
   }
 
   public void reset() {
-    plugin.getProxy().unregisterChannel(OUTGOING_CHANNEL);
+    plugin.server().getChannelRegistrar().unregister(channelIdentifier);
   }
 
-  public void sendPacket(ProxiedPlayer player, AbstractPacket packet) {
+  public void sendPacket(Player player, AbstractPacket packet) {
     Preconditions.checkNotNull(player);
     Preconditions.checkNotNull(packet);
 
-    messengerService
-      .packetSubscriptionService()
-      .broadcastPacketToSubscribers(player, packet);
-    player.sendData(OUTGOING_CHANNEL, prepareDataToSend(packet));
+    messengerService.packetSubscriptionService()
+            .broadcastPacketToSubscribers(player, packet);
+
+    player.sendPluginMessage(channelIdentifier, prepareDataToSend(packet));
   }
 
   private byte[] prepareDataToSend(AbstractPacket packet) {
-    // Create byte array wrapper
     ByteArrayDataOutput byteArrayWrapper = newByteArrayDataOutput();
-    // Push protocol head
+
     pushProtocolHeader(byteArrayWrapper);
-    // Push protocol version
+
     pushProtocolVersion(byteArrayWrapper);
-    // Push packet head
+
     pushPacketHeader(byteArrayWrapper, packet.getClass());
-    // Push packet data
+
     pushPacketData(byteArrayWrapper, packet);
-    // Push protocol footer
+
     pushProtocolFooter(byteArrayWrapper);
-    // Extract byte array from wrapper
+
     return byteArrayWrapper.toByteArray();
   }
 
@@ -63,17 +63,11 @@ public final class PacketSender {
     byteArrayWrapper.writeInt(PROTOCOL_VERSION);
   }
 
-  private void pushPacketHeader(
-    ByteArrayDataOutput byteArrayWrapper,
-    Class<? extends AbstractPacket> packetClass
-  ) {
+  private void pushPacketHeader(ByteArrayDataOutput byteArrayWrapper, Class<? extends AbstractPacket> packetClass) {
     byteArrayWrapper.writeInt(PacketRegister.identifierOf(packetClass));
   }
 
-  private void pushPacketData(
-    ByteArrayDataOutput byteArrayWrapper,
-    AbstractPacket packetToSend
-  ) {
+  private void pushPacketData(ByteArrayDataOutput byteArrayWrapper, AbstractPacket packetToSend) {
     byte[] bytes = serialize(packetToSend);
     byteArrayWrapper.write(bytes);
   }
@@ -89,14 +83,10 @@ public final class PacketSender {
   }
 
   private ByteArrayDataOutput newByteArrayDataOutput() {
-    //noinspection UnstableApiUsage
     return ByteStreams.newDataOutput();
   }
 
-  public static PacketSender createFrom(
-    IntaveProxySupportPlugin plugin,
-    MessengerService messengerService
-  ) {
+  public static PacketSender createFrom(IntaveProxySupportPlugin plugin, MessengerService messengerService) {
     return new PacketSender(plugin, messengerService);
   }
 }

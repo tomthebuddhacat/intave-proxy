@@ -8,6 +8,7 @@ import de.jpx3.ips.connect.bukkit.AbstractPacket;
 import java.util.UUID;
 
 public final class PacketInKCVAction extends AbstractPacket {
+
   private UUID id;
   private String kickingCheckName;
   private String kickingCheckCategory;
@@ -17,10 +18,7 @@ public final class PacketInKCVAction extends AbstractPacket {
   public PacketInKCVAction() {
   }
 
-  public PacketInKCVAction(
-    UUID id, String checkName, String checkCategory,
-    String finalFlagMessage, int finalTotalViolationLevel
-  ) {
+  public PacketInKCVAction(UUID id, String checkName, String checkCategory, String finalFlagMessage, int finalTotalViolationLevel) {
     this.id = id;
     this.kickingCheckName = checkName;
     this.kickingCheckCategory = checkCategory;

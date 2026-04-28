@@ -2,81 +2,80 @@ package de.jpx3.ips.connect.bukkit;
 
 import com.google.common.io.ByteArrayDataInput;
 import com.google.common.io.ByteStreams;
+import com.velocitypowered.api.event.Subscribe;
+import com.velocitypowered.api.event.connection.PluginMessageEvent;
+import com.velocitypowered.api.proxy.Player;
+import com.velocitypowered.api.proxy.messages.MinecraftChannelIdentifier;
 import de.jpx3.ips.IntaveProxySupportPlugin;
 import de.jpx3.ips.connect.bukkit.exceptions.InvalidPacketException;
 import de.jpx3.ips.connect.bukkit.exceptions.ProtocolVersionMismatchException;
-import net.md_5.bungee.api.connection.Connection;
-import net.md_5.bungee.api.connection.ProxiedPlayer;
-import net.md_5.bungee.api.event.PluginMessageEvent;
-import net.md_5.bungee.api.plugin.Listener;
-import net.md_5.bungee.event.EventHandler;
-import net.md_5.bungee.event.EventPriority;
 
 import static de.jpx3.ips.connect.bukkit.MessengerService.*;
 
-public final class PacketReceiver implements Listener {
+public final class PacketReceiver {
+
   private final IntaveProxySupportPlugin plugin;
   private final MessengerService messengerService;
 
-  private PacketReceiver(
-    IntaveProxySupportPlugin plugin,
-    MessengerService messengerService
-  ) {
+  private final MinecraftChannelIdentifier channelIdentifier = MinecraftChannelIdentifier.from(OUTGOING_CHANNEL);
+
+  private PacketReceiver(IntaveProxySupportPlugin plugin, MessengerService messengerService) {
     this.plugin = plugin;
     this.messengerService = messengerService;
   }
 
   public void setup() {
-    plugin.getProxy().getPluginManager().registerListener(plugin, this);
+    plugin.server().getEventManager().register(plugin, this);
   }
 
   public void unset() {
-    plugin.getProxy().getPluginManager().unregisterListener(this);
+    plugin.server().getEventManager().unregisterListener(plugin, this);
   }
 
-  @SuppressWarnings("unused")
-  @EventHandler(priority = EventPriority.LOWEST)
+  @Subscribe
   public void onPluginMessageReceive(PluginMessageEvent event) {
-    if (isUpstream(event.getSender())) {
+    if (!event.getIdentifier().equals(channelIdentifier)) {
       return;
     }
-    boolean isIntavePacket = receivePayloadPacket((ProxiedPlayer) event.getReceiver(), event.getData());
-    if(isIntavePacket) {
-      event.setCancelled(true);
+
+    if (!(event.getSource() instanceof Player player)) {
+      return;
+    }
+
+    boolean isWatchCatPacket = receivePayloadPacket(player, event.getData());
+
+    if (isWatchCatPacket) {
+      event.setResult(PluginMessageEvent.ForwardResult.handled());
     }
   }
 
-  public boolean receivePayloadPacket(
-    ProxiedPlayer player, byte[] data
-  ) {
+  public boolean receivePayloadPacket(Player player, byte[] data) {
     ByteArrayDataInput inputData = newByteArrayDataInputFrom(data);
+
     try {
       String channelName = readChannelName(inputData);
       if (!channelName.equalsIgnoreCase(PROTOCOL_HEADER)) {
         return false;
       }
+
       int protocolVersion = readProtocolVersion(inputData);
       if (protocolVersion != PROTOCOL_VERSION) {
-        String invalidVersionExceptionMessage = String.format(
-          "Invalid protocol version (Ours: %s Packet: %s)",
-          PROTOCOL_VERSION,
-          protocolVersion
-        );
         throw new ProtocolVersionMismatchException(
-          invalidVersionExceptionMessage
+                String.format("Invalid protocol version (Ours: %s Packet: %s)", PROTOCOL_VERSION, protocolVersion)
         );
       }
+
       AbstractPacket constructedPacket = constructPacketFrom(inputData);
+
       String footer = readFooter(inputData);
       if (!footer.equalsIgnoreCase(PROTOCOL_FOOTER)) {
         throw new InvalidPacketException("Invalid end of packet");
       }
-      messengerService
-        .packetSubscriptionService()
-        .broadcastPacketToSubscribers(
-          player, constructedPacket
-        );
+
+      messengerService.packetSubscriptionService().broadcastPacketToSubscribers(player, constructedPacket);
+
       return true;
+
     } catch (IllegalStateException exception) {
       return false;
     } catch (IllegalAccessException | InstantiationException exception) {
@@ -84,61 +83,43 @@ public final class PacketReceiver implements Listener {
     }
   }
 
-  private String readChannelName(ByteArrayDataInput byteArrayWrapper)
-    throws IllegalStateException {
-    return byteArrayWrapper.readUTF();
+  private String readChannelName(ByteArrayDataInput input) {
+    return input.readUTF();
   }
 
-  private int readProtocolVersion(ByteArrayDataInput byteArrayWrapper)
-    throws IllegalStateException {
-    return byteArrayWrapper.readInt();
+  private int readProtocolVersion(ByteArrayDataInput input) {
+    return input.readInt();
   }
 
-  private int readPacketIdentifier(ByteArrayDataInput byteArrayWrapper)
-    throws IllegalStateException {
-    return byteArrayWrapper.readInt();
+  private int readPacketIdentifier(ByteArrayDataInput input) {
+    return input.readInt();
   }
 
-  private AbstractPacket constructPacketFrom(ByteArrayDataInput byteArrayDataInput)
-    throws InstantiationException, IllegalAccessException {
-    int packetId = readPacketIdentifier(byteArrayDataInput);
-    return constructPacketFrom(byteArrayDataInput, packetId);
+  private AbstractPacket constructPacketFrom(ByteArrayDataInput input)
+          throws InstantiationException, IllegalAccessException {
+    int packetId = readPacketIdentifier(input);
+    return constructPacketFrom(input, packetId);
   }
 
-  private AbstractPacket constructPacketFrom(
-    ByteArrayDataInput byteArrayDataInput,
-    int packetId
-  ) throws IllegalAccessException, InstantiationException {
+  private AbstractPacket constructPacketFrom(ByteArrayDataInput input, int packetId) throws IllegalAccessException, InstantiationException {
     AbstractPacket packet = PacketRegister
-      .classOf(packetId)
-      .orElseThrow(IllegalStateException::new)
-      .newInstance();
-    packet.applyFrom(byteArrayDataInput);
+            .classOf(packetId)
+            .orElseThrow(IllegalStateException::new)
+            .newInstance();
+
+    packet.applyFrom(input);
     return packet;
   }
 
-  private String readFooter(ByteArrayDataInput byteArrayWrapper)
-    throws IllegalStateException {
-    return byteArrayWrapper.readUTF();
+  private String readFooter(ByteArrayDataInput input) {
+    return input.readUTF();
   }
 
   private ByteArrayDataInput newByteArrayDataInputFrom(byte[] byteArray) {
-    //noinspection UnstableApiUsage
     return ByteStreams.newDataInput(byteArray);
   }
 
-  private boolean isMarkedAsIntaveChannel(String channelTag) {
-    return channelTag.equalsIgnoreCase(OUTGOING_CHANNEL);
-  }
-
-  private boolean isUpstream(Connection connection) {
-    return connection instanceof ProxiedPlayer;
-  }
-
-  public static PacketReceiver createFrom(
-    IntaveProxySupportPlugin plugin,
-    MessengerService messengerService
-  ) {
+  public static PacketReceiver createFrom(IntaveProxySupportPlugin plugin, MessengerService messengerService) {
     return new PacketReceiver(plugin, messengerService);
   }
 }

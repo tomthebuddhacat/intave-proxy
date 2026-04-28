@@ -11,17 +11,14 @@ import java.util.concurrent.Executor;
 import java.util.function.Consumer;
 
 public final class AsyncQueryExecutor implements IQueryExecutor {
+
   private final Executor executor;
   private final Connection connection;
   private final String databaseName;
 
   private volatile Statement statement;
 
-  AsyncQueryExecutor(
-    Executor executor,
-    Connection connection,
-    String databaseName
-  ) {
+  AsyncQueryExecutor(Executor executor, Connection connection, String databaseName) {
     this.executor = executor;
     this.connection = connection;
     this.databaseName = databaseName;
@@ -45,9 +42,7 @@ public final class AsyncQueryExecutor implements IQueryExecutor {
   }
 
   @Override
-  public void find(
-    String query, Consumer<List<Map<String, Object>>> lazyReturn
-  ) {
+  public void find(String query, Consumer<List<Map<String, Object>>> lazyReturn) {
     Preconditions.checkNotNull(query);
     Preconditions.checkNotNull(lazyReturn);
     ensureStatementPresence();

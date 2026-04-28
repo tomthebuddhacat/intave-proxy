@@ -2,9 +2,10 @@ package de.jpx3.ips.connect.bukkit;
 
 import com.google.common.base.Preconditions;
 import de.jpx3.ips.IntaveProxySupportPlugin;
-import net.md_5.bungee.config.Configuration;
+import org.spongepowered.configurate.ConfigurationNode;
 
 public final class MessengerService {
+
   public final static int PROTOCOL_VERSION = 5;
   public final static String OUTGOING_CHANNEL = "intave:proxy";
   public final static String PROTOCOL_HEADER = "IPC_BEGIN";
@@ -18,23 +19,23 @@ public final class MessengerService {
   private PacketSubscriptionService packetSubscriptionService;
   private boolean channelOpen = false;
 
-  private MessengerService(IntaveProxySupportPlugin plugin, Configuration configuration) {
+  private MessengerService(IntaveProxySupportPlugin plugin, ConfigurationNode configuration) {
     this.plugin = plugin;
-    this.enabled = configuration.getBoolean("enabled");
+    this.enabled = configuration.node("enabled").getBoolean();
   }
 
   public void setup() {
     packetSender = PacketSender.createFrom(plugin, this);
-    packetReceiver = PacketReceiver.createFrom(plugin,this);
+    packetReceiver = PacketReceiver.createFrom(plugin, this);
     packetSubscriptionService = PacketSubscriptionService.createFrom(plugin);
 
-    if(enabled()) {
+    if (enabled()) {
       openChannel();
     }
   }
 
   public void openChannel() {
-    if(channelOpen() || !enabled()) {
+    if (channelOpen() || !enabled()) {
       throw new IllegalStateException();
     }
 
@@ -45,7 +46,7 @@ public final class MessengerService {
   }
 
   public void closeChannel() {
-    if(!channelOpen()) {
+    if (!channelOpen()) {
       throw new IllegalStateException();
     }
 
@@ -75,10 +76,7 @@ public final class MessengerService {
     return packetSubscriptionService;
   }
 
-  public static MessengerService createFrom(
-    IntaveProxySupportPlugin proxySupportPlugin,
-    Configuration configuration
-  ) {
+  public static MessengerService createFrom(IntaveProxySupportPlugin proxySupportPlugin, ConfigurationNode configuration) {
     Preconditions.checkNotNull(proxySupportPlugin);
     Preconditions.checkNotNull(configuration);
     return new MessengerService(proxySupportPlugin, configuration);

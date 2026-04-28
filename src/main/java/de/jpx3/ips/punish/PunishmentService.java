@@ -1,33 +1,30 @@
 package de.jpx3.ips.punish;
 
 import com.google.common.base.Preconditions;
+import com.velocitypowered.api.command.CommandManager;
+import com.velocitypowered.api.proxy.Player;
+import com.velocitypowered.api.proxy.ProxyServer;
 import de.jpx3.ips.IntaveProxySupportPlugin;
 import de.jpx3.ips.connect.bukkit.PacketSubscriptionService;
 import de.jpx3.ips.connect.bukkit.packets.PacketInCommandExecution;
 import de.jpx3.ips.connect.bukkit.packets.PacketInPunishmentRequest;
 import de.jpx3.ips.punish.driver.RemotePunishmentDriver;
 import de.jpx3.ips.punish.driver.RuntimePunishmentDriver;
-import net.md_5.bungee.api.CommandSender;
-import net.md_5.bungee.api.ProxyServer;
-import net.md_5.bungee.api.connection.ProxiedPlayer;
-import net.md_5.bungee.api.plugin.PluginManager;
-import net.md_5.bungee.config.Configuration;
+import org.spongepowered.configurate.ConfigurationNode;
 
 import java.util.UUID;
 
 public final class PunishmentService {
+
   private final IntaveProxySupportPlugin plugin;
-  private final Configuration configuration;
+  private final ConfigurationNode configuration;
 
   public final static String BAN_LAYOUT_CONFIGURATION_KEY = "message-layout.ban-layout";
   public final static String KICK_LAYOUT_CONFIGURATION_KEY = "message-layout.kick-layout";
 
   private PunishmentDriver punishmentDriver;
 
-  private PunishmentService(
-    IntaveProxySupportPlugin plugin,
-    Configuration configuration
-  ) {
+  private PunishmentService(IntaveProxySupportPlugin plugin, ConfigurationNode configuration) {
     this.plugin = plugin;
     this.configuration = configuration;
   }
@@ -38,22 +35,14 @@ public final class PunishmentService {
   }
 
   private void setupSubscriptions() {
-    PacketSubscriptionService packetSubscriptionService =
-      plugin.messengerService().packetSubscriptionService();
-    packetSubscriptionService.subscribe(
-        PacketInPunishmentRequest.class,
-        this::processPunishmentPacket
-    );
-    packetSubscriptionService.subscribe(
-        PacketInCommandExecution.class,
-        this::processCommandPacket
-    );
+    PacketSubscriptionService packetSubscriptionService = plugin.messengerService().packetSubscriptionService();
+
+    packetSubscriptionService.subscribe(PacketInPunishmentRequest.class, this::processPunishmentPacket);
+
+    packetSubscriptionService.subscribe(PacketInCommandExecution.class, this::processCommandPacket);
   }
 
-  private void processPunishmentPacket(
-    ProxiedPlayer sender,
-    PacketInPunishmentRequest packet
-  ) {
+  private void processPunishmentPacket(Player sender, PacketInPunishmentRequest packet) {
     UUID id = packet.id();
     String message = packet.message();
 
@@ -63,29 +52,24 @@ public final class PunishmentService {
 
     switch (packet.punishmentType()) {
       case BAN:
-        punishmentDriver.
-          banPlayer(id, message);
+        punishmentDriver.banPlayer(id, message);
         break;
       case KICK:
-        punishmentDriver.
-          kickPlayer(id, message);
+        punishmentDriver.kickPlayer(id, message);
         break;
       case TEMP_BAN:
-        punishmentDriver.
-          banPlayerTemporarily(id, packet.endTimestamp(), message);
+        punishmentDriver.banPlayerTemporarily(id, packet.endTimestamp(), message);
         break;
     }
   }
 
-  private void processCommandPacket(
-    ProxiedPlayer sender,
-    PacketInCommandExecution packet
-  ) {
+  private void processCommandPacket(Player sender, PacketInCommandExecution packet) {
     String command = packet.command();
-    ProxyServer server = ProxyServer.getInstance();
-    PluginManager pluginManager = server.getPluginManager();
-    CommandSender console = server.getConsole();
-    pluginManager.dispatchCommand(console, command);
+
+    ProxyServer server = plugin.server();
+    CommandManager commandManager = server.getCommandManager();
+
+    commandManager.executeAsync(server.getConsoleCommandSource(), command);
   }
 
   private void setupPunishmentDriver() {
@@ -112,7 +96,6 @@ public final class PunishmentService {
       case DRIVER_NAME_SQL_NOCACHE:
         punishmentDriver = RemotePunishmentDriver.createWithCachingDisabled(plugin);
         break;
-
       default:
         throw new IllegalStateException("Could not find driver " + driverName);
     }
@@ -120,10 +103,8 @@ public final class PunishmentService {
     return punishmentDriver;
   }
 
-  public String resolveMessageBy(
-    String configurationKey, BanEntry banEntry
-  ) {
-    String layout = configuration.getString(configurationKey);
+  public String resolveMessageBy(String configurationKey, BanEntry banEntry) {
+    String layout = configuration.node(configurationKey.split("\\.")).getString();
     return MessageFormatter.formatMessage(layout, banEntry);
   }
 
@@ -132,17 +113,14 @@ public final class PunishmentService {
   }
 
   public String desiredPunishmentDriverName() {
-    return configuration.getString("driver", "runtime");
+    return configuration.node("driver").getString("runtime");
   }
 
   public void setPunishmentDriver(PunishmentDriver punishmentDriver) {
     this.punishmentDriver = punishmentDriver;
   }
 
-  public static PunishmentService createFrom(
-    IntaveProxySupportPlugin plugin,
-    Configuration configuration
-  ) {
+  public static PunishmentService createFrom(IntaveProxySupportPlugin plugin, ConfigurationNode configuration) {
     return new PunishmentService(plugin, configuration);
   }
 }

@@ -1,7 +1,7 @@
 package de.jpx3.ips.connect.bukkit;
 
-import net.md_5.bungee.api.connection.ProxiedPlayer;
+import com.velocitypowered.api.proxy.Player;
 
 public interface PacketSubscriber<P extends AbstractPacket> {
-  void handle(ProxiedPlayer sender, P packet);
+  void handle(Player sender, P packet);
 }

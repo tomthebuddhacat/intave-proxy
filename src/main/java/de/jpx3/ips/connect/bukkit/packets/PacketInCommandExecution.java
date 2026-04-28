@@ -8,15 +8,14 @@ import de.jpx3.ips.connect.bukkit.AbstractPacket;
 import java.util.UUID;
 
 public final class PacketInCommandExecution extends AbstractPacket {
+
   private UUID id;
   private String command;
 
   public PacketInCommandExecution() {
   }
 
-  public PacketInCommandExecution(
-    UUID id, String command
-  ) {
+  public PacketInCommandExecution(UUID id, String command) {
     this.id = id;
     this.command = command;
   }

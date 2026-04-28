@@ -5,6 +5,7 @@ import com.google.common.base.Preconditions;
 import java.util.UUID;
 
 public final class BanEntry {
+
   private final UUID id;
   private String reason;
   private long end;
