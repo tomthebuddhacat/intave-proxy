@@ -1,0 +1,5 @@
+rootProject.name = 'intave-proxy-support'
+
+include 'common'
+include 'velocity-proxy'
+include 'bungee-proxy'
